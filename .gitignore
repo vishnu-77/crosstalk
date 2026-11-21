@@ -1,0 +1,5 @@
+node_modules/
+demo/
+# written by Claude Code when it loads the mod
+plugin/*/.claude-plugin/types/
+plugin/*/tsconfig.json

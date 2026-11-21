@@ -1,0 +1,27 @@
+{
+  "_help": "Which model, effort and limits each task gets, per agent being called. Read on every call, so edits apply at once. A 'model' passed in the tool call wins over this table. agy ids: run `agy models`. Claude: haiku | sonnet | opus | fable or a full model id. Limits: timeoutS (both agents), maxTurns and budgetUsd (Claude only; agy has no such flags).",
+  "tasks": {
+    "quick":    "Short questions, lookups, yes/no, small rewrites.",
+    "code":     "Write or change code, fix a bug, run a refactor.",
+    "review":   "Review code, a diff or a plan; find bugs or risks.",
+    "research": "Read and summarise files, docs or a codebase; compare options.",
+    "deep":     "Hard design or debugging problems that need long careful reasoning."
+  },
+  "default": "code",
+  "stopRule": "Stop as soon as the task is done: give the answer and finish. Do not keep exploring, re-checking or polishing once you have enough. If you cannot finish within the limits, say what is left and stop.",
+  "dailyBudgetUsd": 5,
+  "agy": {
+    "quick":    { "model": "gemini-3.8-flash-low",    "effort": "low",    "timeoutS": 120 },
+    "code":     { "model": "gemini-3.8-flash-high",   "effort": "medium", "timeoutS": 900 },
+    "review":   { "model": "gemini-3.8-flash-high",   "effort": "high",   "timeoutS": 600 },
+    "research": { "model": "gemini-3.8-flash-medium", "effort": "medium", "timeoutS": 600 },
+    "deep":     { "model": "gemini-3.8-flash-high",   "effort": "max",    "timeoutS": 1500 }
+  },
+  "claude": {
+    "quick":    { "model": "haiku",  "effort": "low",    "timeoutS": 120,  "maxTurns": 3,  "budgetUsd": 0.1 },
+    "code":     { "model": "sonnet", "effort": "medium", "timeoutS": 900,  "maxTurns": 30, "budgetUsd": 1 },
+    "review":   { "model": "opus",   "effort": "high",   "timeoutS": 600,  "maxTurns": 20, "budgetUsd": 1.5 },
+    "research": { "model": "sonnet", "effort": "medium", "timeoutS": 600,  "maxTurns": 25, "budgetUsd": 1 },
+    "deep":     { "model": "opus",   "effort": "xhigh",  "timeoutS": 1500, "maxTurns": 60, "budgetUsd": 3 }
+  }
+}
