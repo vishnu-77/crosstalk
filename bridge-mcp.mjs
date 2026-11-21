@@ -2,7 +2,7 @@
 // Stdio MCP server that exposes one tool, ask_<target>, which runs the other agent CLI in print mode.
 //   node bridge-mcp.mjs agy     -> registered in Claude Code, lets Claude ask agy
 //   node bridge-mcp.mjs claude  -> registered in agy, lets agy ask Claude
-// Extra CLI flags (e.g. permission mode) come from BRIDGE_AGY_ARGS / BRIDGE_CLAUDE_ARGS (JSON array).
+// Extra CLI flags (e.g. permission mode) come from CROSSTALK_AGY_ARGS / CROSSTALK_CLAUDE_ARGS (JSON array).
 import { spawn } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -12,18 +12,18 @@ import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
 import { closedInfo, closeSession, limitReason, pause, pausedInfo } from './state.mjs';
 
-const MAX_DEPTH = Number(process.env.BRIDGE_MAX_DEPTH ?? 2); // stops claude->agy->claude->... loops
-const depth = Number(process.env.BRIDGE_DEPTH ?? 0);
+const MAX_DEPTH = Number(process.env.CROSSTALK_MAX_DEPTH ?? 2); // stops claude->agy->claude->... loops
+const depth = Number(process.env.CROSSTALK_DEPTH ?? 0);
 
 function claudeBin() {
-  if (process.env.BRIDGE_CLAUDE_BIN) return process.env.BRIDGE_CLAUDE_BIN;
+  if (process.env.CROSSTALK_CLAUDE_BIN) return process.env.CROSSTALK_CLAUDE_BIN;
   // npm's claude.cmd shim wraps this exe; calling the exe directly avoids cmd.exe quoting of the prompt.
   const exe = join(process.env.APPDATA ?? '', 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe');
   return process.platform === 'win32' && existsSync(exe) ? exe : 'claude';
 }
 
 // Every call is appended here as a start line and an end line, whichever agent made it; the pane and calls.mjs read it.
-export const LOG = process.env.BRIDGE_LOG || join(homedir(), '.agy-bridge', 'calls.jsonl');
+export const LOG = process.env.CROSSTALK_LOG || join(homedir(), '.crosstalk', 'calls.jsonl');
 const clip = (s, n = 400) => (s && s.length > n ? s.slice(0, n) + '…' : s ?? '');
 function logEvent(ev) {
   try {
@@ -37,7 +37,7 @@ function logEvent(ev) {
 export const CANCEL_DIR = join(dirname(LOG), 'cancel');
 
 // Task -> model + effort, per target. Re-read on every call so edits to routes.json apply without a restart.
-const ROUTES = process.env.BRIDGE_ROUTES || join(dirname(fileURLToPath(import.meta.url)), 'routes.json');
+const ROUTES = process.env.CROSSTALK_ROUTES || join(dirname(fileURLToPath(import.meta.url)), 'routes.json');
 export function loadRoutes() { try { return JSON.parse(readFileSync(ROUTES, 'utf8')); } catch { return {}; } }
 export function route(target, task, model) {
   const r = loadRoutes();
@@ -74,7 +74,7 @@ const extra = (name) => { try { return JSON.parse(process.env[name] || '[]'); } 
 
 export const TARGETS = {
   agy: {
-    bin: () => process.env.BRIDGE_AGY_BIN || 'agy',
+    bin: () => process.env.CROSSTALK_AGY_BIN || 'agy',
     label: 'Antigravity CLI (agy, Gemini models)',
     args: ({ prompt, session, model, effort, timeoutS }) => [
       `--print=${prompt}`, '--output-format', 'json',
@@ -82,7 +82,7 @@ export const TARGETS = {
       ...(session ? ['--conversation', session] : []),
       ...(model ? ['--model', model] : []),
       ...(effort ? ['--effort', effort] : []),
-      ...extra('BRIDGE_AGY_ARGS'),
+      ...extra('CROSSTALK_AGY_ARGS'),
     ],
     parse: (j) => ({ text: j.response ?? '', session: j.conversation_id, error: j.status && j.status !== 'SUCCESS' ? j.status : null }),
   },
@@ -95,19 +95,19 @@ export const TARGETS = {
       ...(maxTurns ? ['--max-turns', String(maxTurns)] : []),
       ...(budgetUsd ? ['--max-budget-usd', String(budgetUsd)] : []),
       // Lean by default: no MCP servers (so it can't call agy back) and no skills. Measured on this profile:
-      // $0.37 / 15.4 s -> $0.07 / 8.5 s per call. BRIDGE_LEAN=0 gives the called Claude your full setup.
-      ...(process.env.BRIDGE_LEAN === '0' ? [] : ['--strict-mcp-config', '--disable-slash-commands']),
+      // $0.37 / 15.4 s -> $0.07 / 8.5 s per call. CROSSTALK_LEAN=0 gives the called Claude your full setup.
+      ...(process.env.CROSSTALK_LEAN === '0' ? [] : ['--strict-mcp-config', '--disable-slash-commands']),
       ...(session ? ['--resume', session] : []),
       ...(model ? ['--model', model] : []),
-      ...extra('BRIDGE_CLAUDE_ARGS'),
+      ...extra('CROSSTALK_CLAUDE_ARGS'),
     ],
     parse: (j) => ({ text: j.result ?? '', session: j.session_id, error: j.is_error ? (j.subtype || 'error') : null }),
   },
 };
 
-const TIMEOUT_MS = Number(process.env.BRIDGE_TIMEOUT_MS ?? 15 * 60 * 1000);
+const TIMEOUT_MS = Number(process.env.CROSSTALK_TIMEOUT_MS ?? 15 * 60 * 1000);
 // How long an agent stays paused after its quota runs out. shortcut: a fixed wait, since neither CLI reports its reset time.
-const PAUSE_MS = Number(process.env.BRIDGE_PAUSE_MS ?? 30 * 60 * 1000);
+const PAUSE_MS = Number(process.env.CROSSTALK_PAUSE_MS ?? 30 * 60 * 1000);
 const clock = (ms) => new Date(ms).toLocaleTimeString();
 
 // Kill the agent and everything it started (its own MCP servers, shells), not just the top process.
@@ -131,7 +131,7 @@ export async function runAgent(target, a) {
   const paused = pausedInfo(LOG, target);
   if (paused) {
     return refuse(`paused: ${paused.reason}`, `${target} is paused because its quota or usage limit ran out (${paused.reason}). ` +
-      `Nothing was started. It resumes at ${clock(paused.until)}; to retry sooner press Resume in /agy-map or run "node calls.mjs resume ${target}". Tell the user.`);
+      `Nothing was started. It resumes at ${clock(paused.until)}; to retry sooner press Resume in /crosstalk or run "node calls.mjs resume ${target}". Tell the user.`);
   }
   const closed = closedInfo(LOG, a.session);
   if (closed) {
@@ -167,7 +167,7 @@ export async function runAgent(target, a) {
       logEvent({ id, event: 'limit', from, to: target, session, reason: why, until });
       r.text = `${target} stopped: its quota or usage limit ran out (${why}). ` +
         `${session ? `Session ${session} is closed and will not be resumed. ` : ''}` +
-        `Calls to ${target} are paused until ${clock(until)}; press Resume in /agy-map or run "node calls.mjs resume ${target}" to retry sooner. Tell the user.`;
+        `Calls to ${target} are paused until ${clock(until)}; press Resume in /crosstalk or run "node calls.mjs resume ${target}" to retry sooner. Tell the user.`;
     }
     logEvent({ id, event: 'end', from, to: target, ms: Date.now() - t0, ok: !r.isError, ...(why && { limit: true }), ...(capped && { capped }), usage, session: r.session || a.session, reply: clip(r.text.replace(/\n\n\[\w+ session: .*\]$/, '')) });
     return r;
@@ -188,7 +188,7 @@ function spawnAgent(target, { prompt, cwd, session, model, effort, timeoutS, max
     // shortcut: prompt goes on argv, so Windows caps it near 32K chars; switch to stdin/stream-json if that bites.
     const child = spawn(t.bin(), t.args({ prompt, session, model, effort, timeoutS, maxTurns, budgetUsd }), {
       cwd: cwd || process.cwd(),
-      env: { ...process.env, BRIDGE_DEPTH: String(depth + 1) },
+      env: { ...process.env, CROSSTALK_DEPTH: String(depth + 1) },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
@@ -203,7 +203,7 @@ function spawnAgent(target, { prompt, cwd, session, model, effort, timeoutS, max
       stop.removeEventListener('abort', onStop);
       if (stop.aborted) {
         const why = typeof stop.reason === 'string' ? stop.reason
-          : signal?.aborted ? 'cancelled by the caller' : `timed out after ${Math.round(limitMs / 1000)} s (the task's timeoutS, or BRIDGE_TIMEOUT_MS)`;
+          : signal?.aborted ? 'cancelled by the caller' : `timed out after ${Math.round(limitMs / 1000)} s (the task's timeoutS, or CROSSTALK_TIMEOUT_MS)`;
         return resolve({ isError: true, text: `${target} ${why}; its process tree was stopped.` });
       }
       const line = out.trim().split('\n').reverse().find((l) => l.trim().startsWith('{'));
@@ -244,7 +244,7 @@ export function toolFor(target) {
 export async function handle(target, msg, signal) {
   const { id, method, params } = msg;
   if (method === 'initialize') {
-    return { protocolVersion: params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: `bridge-${target}`, version: '1.0.0' } };
+    return { protocolVersion: params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: `crosstalk-${target}`, version: '1.0.0' } };
   }
   if (method === 'ping') return {};
   if (method === 'tools/list') return { tools: [toolFor(target)] };
@@ -254,7 +254,7 @@ export async function handle(target, msg, signal) {
     if (typeof a.prompt !== 'string' || !a.prompt.trim()) return { isError: true, content: [{ type: 'text', text: 'prompt is required' }] };
     if (depth >= MAX_DEPTH) {
       logEvent({ id: randomUUID(), event: 'refused', from: target === 'agy' ? 'claude' : 'agy', to: target, depth, prompt: clip(a.prompt) });
-      return { isError: true, content: [{ type: 'text', text: `Refused: agent call depth ${depth} reached BRIDGE_MAX_DEPTH=${MAX_DEPTH}. Answer yourself instead.` }] };
+      return { isError: true, content: [{ type: 'text', text: `Refused: agent call depth ${depth} reached CROSSTALK_MAX_DEPTH=${MAX_DEPTH}. Answer yourself instead.` }] };
     }
     const r = await runAgent(target, { ...a, signal });
     return { isError: r.isError, content: [{ type: 'text', text: r.text }] };

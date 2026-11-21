@@ -1,4 +1,4 @@
-// One agent-to-agent call, paired from the lines agy-bridge writes to ~/.agy-bridge/calls.jsonl.
+// One agent-to-agent call, paired from the lines crosstalk writes to ~/.crosstalk/calls.jsonl.
 export type BridgeCall = {
   id: string
   from: string
@@ -28,15 +28,15 @@ export type View = 'all' | 'running' | 'failed' | 'sessions' | 'routes'
 // One row of routes.json: which model and effort a task gets for each agent.
 export type RouteRow = { task: string; about: string; agy: string; claude: string }
 
-// ~/.agy-bridge/paused/<agent>.json while active: calls to that agent are refused until `until`.
+// ~/.crosstalk/paused/<agent>.json while active: calls to that agent are refused until `until`.
 export type Pause = { target: string; reason: string; at: number; until: number }
 
-// ~/.agy-bridge/closed/<session>.json: a session the bridge will never resume.
+// ~/.crosstalk/closed/<session>.json: a session the bridge will never resume.
 export type Closed = { session: string; target: string; by: string; reason?: string; at: number; cleared?: boolean }
 
 declare module 'claude-code' {
   interface PluginState {
-    'agy-bridge-map': {
+    'crosstalk': {
       calls: Shaped<BridgeCall[]>
       view: Shaped<View>
       routes: Shaped<RouteRow[]>

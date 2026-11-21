@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Fast health check for agy-bridge (no model calls, ~1-2 s). Run at every session start by hooks.
+// Fast health check for crosstalk (no model calls, ~1-2 s). Run at every session start by hooks.
 //   node health.mjs           human-readable, exit 1 on failure
 //   node health.mjs --claude  Claude Code SessionStart hook JSON
 //   node health.mjs --agy     agy SessionStart hook JSON
@@ -14,7 +14,7 @@ import { pausedInfo } from './state.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BRIDGE = path.join(HERE, 'bridge-mcp.mjs');
 const CLAUDE_DIR = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
-const PLUGIN = path.join(os.homedir(), '.gemini', 'config', 'plugins', 'claude-sync');
+const PLUGIN = path.join(os.homedir(), '.gemini', 'config', 'plugins', 'crosstalk');
 const readJson = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; } };
 const read = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
 const same = (a, b) => path.resolve(a ?? '').toLowerCase() === path.resolve(b ?? '').toLowerCase();
@@ -51,7 +51,7 @@ function registrations() {
   if (!agy) fails.push('Claude has no "agy" MCP server registered');
   else if (!agy.args?.some((a) => same(a, BRIDGE))) fails.push(`Claude's "agy" MCP server points somewhere else: ${agy.args?.join(' ')}`);
 
-  if (readJson(path.join(PLUGIN, 'plugin.json'))?.name !== 'claude-sync') return fails.push(`agy plugin missing at ${PLUGIN}`);
+  if (readJson(path.join(PLUGIN, 'plugin.json'))?.name !== 'crosstalk') return fails.push(`agy plugin missing at ${PLUGIN}`);
   const claude = readJson(path.join(PLUGIN, 'mcp_config.json'))?.mcpServers?.claude;
   if (!claude?.args?.some((a) => same(a, BRIDGE))) fails.push('agy plugin has no working "claude" bridge entry');
 }
@@ -106,7 +106,7 @@ registrations();
 drift();
 // An agent whose quota ran out is paused: not broken, but the user must know before relying on it.
 const paused = ['agy', 'claude'].map((t) => pausedInfo(LOG, t)).filter(Boolean)
-  .map((p) => `PAUSED ${p.target}: quota/usage limit ran out (${p.reason}); calls refused until ${new Date(p.until).toLocaleTimeString()}. Resume early: node calls.mjs resume ${p.target} or the Resume button in /agy-map`);
+  .map((p) => `PAUSED ${p.target}: quota/usage limit ran out (${p.reason}); calls refused until ${new Date(p.until).toLocaleTimeString()}. Resume early: node calls.mjs resume ${p.target} or the Resume button in /crosstalk`);
 if (process.argv.includes('--live') && !fails.length && !paused.length) await Promise.all([live('agy'), live('claude')]);
 
 const fix = `cd ${HERE} && node sync.mjs`;
@@ -116,10 +116,10 @@ const lines = [
   ...fails.map((f) => `FAIL ${f}`),
   ...(stale.length ? [`STALE agy copy: ${stale.join(', ')}`] : []),
 ];
-const summary = paused.length && !fails.length ? `agy-bridge: ${paused.map((p) => p.split(':')[0].replace('PAUSED ', '')).join(' and ')} paused because the quota ran out; tell the user.`
-  : fails.length ?`agy-bridge: ${fails.length} problem(s), ask_agy/ask_claude may not work. Fix: ${fix}`
-  : stale.length ? `agy-bridge OK, but agy is behind your Claude setup (${stale.join(', ')}). Run: ${fix}`
-  : 'agy-bridge OK (agy + claude CLIs, both bridges, registrations, synced setup)';
+const summary = paused.length && !fails.length ? `crosstalk: ${paused.map((p) => p.split(':')[0].replace('PAUSED ', '')).join(' and ')} paused because the quota ran out; tell the user.`
+  : fails.length ?`crosstalk: ${fails.length} problem(s), ask_agy/ask_claude may not work. Fix: ${fix}`
+  : stale.length ? `crosstalk OK, but agy is behind your Claude setup (${stale.join(', ')}). Run: ${fix}`
+  : 'crosstalk OK (agy + claude CLIs, both bridges, registrations, synced setup)';
 
 const mode = process.argv[2];
 if (mode === '--claude') {

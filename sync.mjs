@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { TARGETS } from './bridge-mcp.mjs';
 
 const DRY = process.argv.includes('--dry');
-const NAME = 'claude-sync';
+const NAME = 'crosstalk';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BRIDGE = path.join(HERE, 'bridge-mcp.mjs');
 const CLAUDE_DIR = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
@@ -47,7 +47,7 @@ function syncRules() {
   const src = path.join(CLAUDE_DIR, 'CLAUDE.md');
   if (!fs.existsSync(src)) return skipped.push('CLAUDE.md: not found');
   const body = fs.readFileSync(src, 'utf8');
-  const rule = `---\ntrigger: always_on\n---\n\n<!-- Synced from ${src} by agy-bridge. Edit the source, then re-run sync. -->\n\n${body}`;
+  const rule = `---\ntrigger: always_on\n---\n\n<!-- Synced from ${src} by crosstalk. Edit the source, then re-run sync. -->\n\n${body}`;
   if (Buffer.byteLength(rule) > RULE_CAP) return skipped.push(`CLAUDE.md: ${Buffer.byteLength(rule)} bytes is over agy's 24 KB rule limit, not synced`);
   write('rules/claude.md', rule);
   log('  rule: CLAUDE.md');
@@ -90,7 +90,7 @@ function syncMcp() {
     out[name] = keep;
     log(`  mcp: ${name}`);
   }
-  out.claude = { command: process.execPath, args: [BRIDGE, 'claude'], ...(process.env.BRIDGE_CLAUDE_ARGS && { env: { BRIDGE_CLAUDE_ARGS: process.env.BRIDGE_CLAUDE_ARGS } }) };
+  out.claude = { command: process.execPath, args: [BRIDGE, 'claude'], ...(process.env.CROSSTALK_CLAUDE_ARGS && { env: { CROSSTALK_CLAUDE_ARGS: process.env.CROSSTALK_CLAUDE_ARGS } }) };
   log('  mcp: claude (bridge: agy -> Claude Code)');
   write('mcp_config.json', { mcpServers: out });
 }
@@ -100,7 +100,7 @@ function registerInClaude() {
   const bin = TARGETS.claude.bin();
   if (DRY) return log('  would run: claude mcp add -s user agy -- node bridge-mcp.mjs agy');
   try { execFileSync(bin, ['mcp', 'remove', 'agy', '-s', 'user'], { stdio: 'ignore' }); } catch { /* not registered yet */ }
-  const env = process.env.BRIDGE_AGY_ARGS ? ['-e', `BRIDGE_AGY_ARGS=${process.env.BRIDGE_AGY_ARGS}`] : [];
+  const env = process.env.CROSSTALK_AGY_ARGS ? ['-e', `CROSSTALK_AGY_ARGS=${process.env.CROSSTALK_AGY_ARGS}`] : [];
   execFileSync(bin, ['mcp', 'add', '-s', 'user', ...env, 'agy', '--', process.execPath, BRIDGE, 'agy'], { stdio: 'inherit' });
 }
 
@@ -111,12 +111,12 @@ syncRules();
 syncSkills();
 syncMcp();
 // Health check at every agy session start (Claude's side is a SessionStart hook in its settings.json).
-write('hooks.json', { 'agy-bridge-health': { SessionStart: [{ type: 'command', command: `"${process.execPath}" "${path.join(HERE, 'health.mjs')}" --agy`, timeout: 20 }] } });
+write('hooks.json', { 'crosstalk-health': { SessionStart: [{ type: 'command', command: `"${process.execPath}" "${path.join(HERE, 'health.mjs')}" --agy`, timeout: 20 }] } });
 log('  hook: health check on agy session start');
 registerInClaude();
 // Tell the side pane where this bridge lives, so it can show routes.json.
 if (!DRY) {
-  const info = path.join(os.homedir(), '.agy-bridge', 'bridge.json');
+  const info = path.join(os.homedir(), '.crosstalk', 'bridge.json');
   fs.mkdirSync(path.dirname(info), { recursive: true });
   fs.writeFileSync(info, JSON.stringify({ dir: HERE, routes: path.join(HERE, 'routes.json') }, null, 2) + '\n');
 }

@@ -1,6 +1,0 @@
-{
-  "name": "agy-bridge-map",
-  "version": "0.1.0",
-  "description": "Live side pane of Claude <-> Antigravity (agy) agent-to-agent calls made through agy-bridge",
-  "types": "./types/index.d.ts"
-}

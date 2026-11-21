@@ -1,0 +1,6 @@
+{
+  "name": "crosstalk",
+  "version": "0.1.0",
+  "description": "Live side pane of Claude <-> Antigravity (agy) agent-to-agent calls made through crosstalk",
+  "types": "./types/index.d.ts"
+}

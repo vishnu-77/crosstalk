@@ -33,10 +33,10 @@ Restart Claude Code to get `ask_agy`, and open a new agy session to get `ask_cla
 
 ```
 /plugin marketplace add vishnu-77/crosstalk
-/plugin install agy-bridge-map@crosstalk
+/plugin install crosstalk@crosstalk
 ```
 
-Then `/agy-map` opens the pane.
+Then `/crosstalk` opens the pane.
 
 **Health check at every Claude start:** add this to the `hooks` section of your Claude Code `settings.json`. agy gets its own start-of-session check from `sync.mjs` automatically.
 
@@ -49,19 +49,19 @@ Then `/agy-map` opens the pane.
 | File | What it does |
 | --- | --- |
 | `bridge-mcp.mjs` | The MCP server. `node bridge-mcp.mjs agy` gives Claude an `ask_agy` tool, and `node bridge-mcp.mjs claude` gives agy an `ask_claude` tool. Each call runs the other agent without its interactive screen and returns its answer plus a session id, which you pass back as `session` to continue the conversation. |
-| `sync.mjs` | Copies your Claude Code setup into an agy plugin (`~/.gemini/config/plugins/claude-sync/`): CLAUDE.md becomes a rule, skills and slash commands become agy skills, and MCP servers are converted. It also registers the bridge on both sides. |
+| `sync.mjs` | Copies your Claude Code setup into an agy plugin (`~/.gemini/config/plugins/crosstalk/`): CLAUDE.md becomes a rule, skills and slash commands become agy skills, and MCP servers are converted. It also registers the bridge on both sides. |
 | `routes.json` | Task → model, effort and limits for each agent, plus the stop rule and the daily budget. |
 | `health.mjs` | Quick check of the setup. `--live` makes a real call in each direction. |
 | `calls.mjs` | Terminal view of the call log, the meter and sessions. |
 | `state.mjs` | Files for closed sessions and paused agents. |
-| `plugin/agy-bridge-map` | The Claude Code side pane. |
+| `plugin/crosstalk` | The Claude Code side pane. |
 | `test.mjs` | Tests that need neither agent installed (`node test.mjs`). |
 
 ## Seeing that the agents are talking
 
-Every call through the bridge, whichever agent makes it, is added to `~/.agy-bridge/calls.jsonl`: a start line, then an end line with how long it took, whether it worked, and the start of the reply. Calls refused by the depth limit are logged too. When the file passes 5 MB it's moved to `calls.jsonl.1`.
+Every call through the bridge, whichever agent makes it, is added to `~/.crosstalk/calls.jsonl`: a start line, then an end line with how long it took, whether it worked, and the start of the reply. Calls refused by the depth limit are logged too. When the file passes 5 MB it's moved to `calls.jsonl.1`.
 
-- **Side pane in Claude Code:** the `agy-bridge-map` mod opens a "claude ⇄ agy" pane when a session starts (`/agy-map` reopens it). It shows totals, then one card per call: direction, ✓/✗/…, time taken, what was asked and what came back. The status line shows `⇄ agy working 12.3s` while a call runs.
+- **Side pane in Claude Code:** the `crosstalk` mod opens a "claude ⇄ agy" pane when a session starts (`/crosstalk` reopens it). It shows totals, then one card per call: direction, ✓/✗/…, time taken, what was asked and what came back. The status line shows `⇄ agy working 12.3s` while a call runs.
 - **Terminal (works from the agy side too):** `node calls.mjs` shows the last 10 calls, and `node calls.mjs -f` follows live.
 
 ## Proving it works
@@ -89,7 +89,7 @@ The file is read on every call, so edits apply straight away. A `model` passed i
 
 ## Side pane controls
 
-- **Agents running:** each agent the bridge has started, with who called it, its task, model, effort, PID and how long it has been running. Each one has a **Stop** button. The pane writes `~/.agy-bridge/cancel/<id>`, and within a second the bridge kills that agent's whole process tree.
+- **Agents running:** each agent the bridge has started, with who called it, its task, model, effort, PID and how long it has been running. Each one has a **Stop** button. The pane writes `~/.crosstalk/cancel/<id>`, and within a second the bridge kills that agent's whole process tree.
 - **All / Running / Failed / Routes:** filter the call list, or show the task → model table.
 - **Status line:** shows the running agent and its model, for example `⇄ claude (opus) 12.3s`.
 
@@ -97,8 +97,8 @@ The file is read on every call, so edits apply straight away. A `model` passed i
 
 When a call fails because an agent's quota or usage limit ran out, the bridge does four things. It looks for messages such as "usage limit reached", HTTP 429, `RESOURCE_EXHAUSTED` or "quota exceeded", and checks only calls that failed, so a reply that just talks about rate limits doesn't trigger it.
 
-1. **Closes that session for good.** It writes `~/.agy-bridge/closed/<session>.json`, and any later call that passes that session id is refused with a message saying why.
-2. **Pauses the agent** for `BRIDGE_PAUSE_MS` (default 30 min), using `~/.agy-bridge/paused/<agent>.json`. While paused, new calls are refused at once and nothing is started.
+1. **Closes that session for good.** It writes `~/.crosstalk/closed/<session>.json`, and any later call that passes that session id is refused with a message saying why.
+2. **Pauses the agent** for `CROSSTALK_PAUSE_MS` (default 30 min), using `~/.crosstalk/paused/<agent>.json`. While paused, new calls are refused at once and nothing is started.
 3. **Tells the calling agent** in plain words: "agy stopped: its quota or usage limit ran out … Session X is closed … paused until 15:01 … Tell the user."
 4. **Tells you:** the side pane shows a red ⛔ banner with a **Resume now** button, pops up a short note, shows `⛔ agy paused (quota)` in the status line and marks the call ⛔. The check that runs when either agent starts reports the pause too, and in Claude it also tells the model so it can pass it on.
 
@@ -110,9 +110,9 @@ Closing and clearing:
 
 ## Speed and cost
 
-- Claude starts lean when agy calls it: no MCP servers and no skills (`--strict-mcp-config --disable-slash-commands`). On this profile that took a call from $0.37 / 15.4 s to $0.07 / 8.5 s. It also means that Claude has no `ask_agy` tool, so it can't loop back. Set `BRIDGE_LEAN=0` before `node sync.mjs` if the called Claude needs your skills or MCP servers.
+- Claude starts lean when agy calls it: no MCP servers and no skills (`--strict-mcp-config --disable-slash-commands`). On this profile that took a call from $0.37 / 15.4 s to $0.07 / 8.5 s. It also means that Claude has no `ask_agy` tool, so it can't loop back. Set `CROSSTALK_LEAN=0` before `node sync.mjs` if the called Claude needs your skills or MCP servers.
 - agy is started as it is. Skipping its skills didn't save anything when measured.
-- Every call has a timeout (`BRIDGE_TIMEOUT_MS`, default 15 min). A call the caller cancels, or whose session closes, is stopped too. The whole process tree is killed, so no agent or MCP server is left running.
+- Every call has a timeout (`CROSSTALK_TIMEOUT_MS`, default 15 min). A call the caller cancels, or whose session closes, is stopped too. The whole process tree is killed, so no agent or MCP server is left running.
 
 ## Health check at every start
 
@@ -130,9 +130,9 @@ Each agent runs the other in headless mode, and headless mode can't ask you for 
 
 ```powershell
 # agy, when Claude calls it: allow everything (or pass --settings with a narrower allow list)
-$env:BRIDGE_AGY_ARGS = '["--dangerously-skip-permissions"]'
+$env:CROSSTALK_AGY_ARGS = '["--dangerously-skip-permissions"]'
 # Claude, when agy calls it: e.g. allow edits
-$env:BRIDGE_CLAUDE_ARGS = '["--permission-mode","acceptEdits"]'
+$env:CROSSTALK_CLAUDE_ARGS = '["--permission-mode","acceptEdits"]'
 node sync.mjs
 ```
 
@@ -140,7 +140,7 @@ Calling the bridge tool itself: interactive sessions ask you the first time. For
 
 ## Loop guard
 
-Every call raises `BRIDGE_DEPTH` by one. Past `BRIDGE_MAX_DEPTH` (default 2), the tool refuses, so the agents can't keep calling each other forever.
+Every call raises `CROSSTALK_DEPTH` by one. Past `CROSSTALK_MAX_DEPTH` (default 2), the tool refuses, so the agents can't keep calling each other forever.
 
 ## Not synced
 
@@ -150,5 +150,5 @@ Claude hooks and permissions (agy uses different tool names and rule syntax). Cl
 
 ```powershell
 claude mcp remove agy -s user
-Remove-Item -Recurse ~/.gemini/config/plugins/claude-sync
+Remove-Item -Recurse ~/.gemini/config/plugins/crosstalk
 ```

@@ -1,9 +1,9 @@
 import { expect, test } from 'claude-code/testing'
 
 const PANE = {
-  plugin: 'agy-bridge-map',
+  plugin: 'crosstalk',
   component: 'Pane',
-  requestId: 'agy-bridge-map',
+  requestId: 'crosstalk',
   props: { title: 'claude ⇄ agy', isFocused: false, bodyColumns: 80, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} },
 } as const
 
@@ -25,8 +25,8 @@ const writes: string[] = []
 
 // Stands in for the engine: the log, any state files (path suffix -> text), the clock.
 function engine(on: any, { log = LOG, files = {} as Record<string, string>, now = 5000 } = {}) {
-  const all: Record<string, string> = { 'bridge.json': '{"routes":"D:/agy-bridge/routes.json"}', 'routes.json': ROUTES, ...files }
-  on('command.register', () => ({ value: { command: 'agy-map' } }))
+  const all: Record<string, string> = { 'bridge.json': '{"routes":"D:/crosstalk/routes.json"}', 'routes.json': ROUTES, ...files }
+  on('command.register', () => ({ value: { command: 'crosstalk' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
   on('session.end', (_: unknown, e: any) => ({ sessionId: e.sessionId }))
@@ -75,7 +75,7 @@ test('Stop asks the bridge to kill that agent', async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
 
   await ui.press({ key: 'stop-b' })
-  expect(writes.some(w => w.startsWith('C:/Users/me/.agy-bridge/cancel/b'))).toBe(true)
+  expect(writes.some(w => w.startsWith('C:/Users/me/.crosstalk/cancel/b'))).toBe(true)
   expect((await ui.find({ type: 'Text', text: /stopping/ }))?.text).toBe('stopping…')
   await ui.unmount()
 })

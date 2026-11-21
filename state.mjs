@@ -1,7 +1,7 @@
 // Session and pause state, kept as small JSON files beside the call log so the bridge, the side pane
 // (which can write files but not delete them) and calls.mjs all see the same thing:
-//   ~/.agy-bridge/closed/<session id>.json   a session that must never be resumed (quota, closed by you, /clear)
-//   ~/.agy-bridge/paused/<agent>.json        calls to that agent are refused until `until` (quota ran out)
+//   ~/.crosstalk/closed/<session id>.json   a session that must never be resumed (quota, closed by you, /clear)
+//   ~/.crosstalk/paused/<agent>.json        calls to that agent are refused until `until` (quota ran out)
 import fs from 'node:fs';
 import path from 'node:path';
 

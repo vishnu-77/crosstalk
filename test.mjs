@@ -4,9 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-process.env.BRIDGE_LOG = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-')), 'calls.jsonl');
-process.env.BRIDGE_AGY_BIN = 'no-such-agy-binary'; // fails fast, so a call is logged without running an agent
-process.env.BRIDGE_TIMEOUT_MS = '4000';
+process.env.CROSSTALK_LOG = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-')), 'calls.jsonl');
+process.env.CROSSTALK_AGY_BIN = 'no-such-agy-binary'; // fails fast, so a call is logged without running an agent
+process.env.CROSSTALK_TIMEOUT_MS = '4000';
 const { handle, runAgent, TARGETS, route, toolFor, CANCEL_DIR } = await import('./bridge-mcp.mjs');
 // A stand-in agent: `node -p <prompt>` evaluates the prompt, so a prompt can fake Claude's JSON reply or hang.
 // It drops the stop rule the bridge appends after "\n\n---\n" (that text isn't code) and remembers the full prompt.
@@ -15,7 +15,7 @@ TARGETS.fake = { ...TARGETS.claude, bin: () => process.execPath, args: ({ prompt
 const { pair } = await import('./calls.mjs');
 
 const init = await handle('agy', { id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } });
-assert.equal(init.serverInfo.name, 'bridge-agy');
+assert.equal(init.serverInfo.name, 'crosstalk-agy');
 
 const { tools } = await handle('claude', { id: 2, method: 'tools/list' });
 assert.deepEqual(tools.map((t) => t.name), ['ask_claude']);
@@ -33,7 +33,7 @@ assert.equal(await handle('agy', { method: 'notifications/initialized' }), undef
 // A call is logged as start + end and pairs into one failed call from claude to agy.
 const r = await handle('agy', { id: 7, method: 'tools/call', params: { name: 'ask_agy', arguments: { prompt: 'log me' } } });
 assert.equal(r.isError, true);
-const calls = pair(fs.readFileSync(process.env.BRIDGE_LOG, 'utf8').split('\n').filter(Boolean));
+const calls = pair(fs.readFileSync(process.env.CROSSTALK_LOG, 'utf8').split('\n').filter(Boolean));
 assert.equal(calls.length, 2); // the bad-cwd call above is logged too
 const last = calls.at(-1);
 assert.deepEqual([last.from, last.to, last.status, last.prompt], ['claude', 'agy', 'failed', 'log me']);
@@ -45,7 +45,7 @@ const fake = await runAgent('fake', { prompt: 'JSON.stringify({ result: "hi", se
 assert.deepEqual([fake.isError, fake.text.split('\n')[0]], [false, 'hi']);
 assert.match(fake.text, /fake session: s1/);
 
-// A hung agent is killed at BRIDGE_TIMEOUT_MS, and a cancel stops it at once.
+// A hung agent is killed at CROSSTALK_TIMEOUT_MS, and a cancel stops it at once.
 const hang = 'new Promise(r => setTimeout(r, 60000))';
 let t = Date.now();
 const slow = await runAgent('fake', { prompt: hang });
@@ -68,7 +68,7 @@ assert.deepEqual(toolFor('agy').inputSchema.properties.task.enum, ['quick', 'cod
 
 // The side pane stops a running call by creating cancel/<id>; the spawned PID and the task/model are logged.
 const stopIt = setInterval(() => {
-  const lines = fs.readFileSync(process.env.BRIDGE_LOG, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const lines = fs.readFileSync(process.env.CROSSTALK_LOG, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   const running = lines.findLast((e) => e.event === 'spawned');
   if (running && !lines.some((e) => e.event === 'end' && e.id === running.id)) {
     fs.mkdirSync(CANCEL_DIR, { recursive: true });
@@ -80,7 +80,7 @@ t = Date.now();
 const stopped = await runAgent('fake', { prompt: hang, task: 'review' });
 assert.match(stopped.text, /stopped from the side pane/);
 assert.ok(Date.now() - t < 3500, 'pane stop should beat the timeout');
-const last2 = pair(fs.readFileSync(process.env.BRIDGE_LOG, 'utf8').split('\n').filter(Boolean)).at(-1);
+const last2 = pair(fs.readFileSync(process.env.CROSSTALK_LOG, 'utf8').split('\n').filter(Boolean)).at(-1);
 assert.equal(last2.status, 'failed');
 assert.ok(last2.pid > 0);
 assert.equal(last2.task, 'review'); // 'fake' has no routes of its own, so no model/effort; route() is tested above
@@ -88,7 +88,7 @@ assert.equal(fs.existsSync(`${CANCEL_DIR}/${last2.id}`), false, 'cancel file is 
 
 // Quota: a failed call whose output says the usage limit ran out closes its session and pauses the agent.
 const { closedInfo, pausedInfo, resume, closeSession, limitReason } = await import('./state.mjs');
-const LOGP = process.env.BRIDGE_LOG;
+const LOGP = process.env.CROSSTALK_LOG;
 const quota = await runAgent('fake', { prompt: 'JSON.stringify({ is_error: true, subtype: "error", result: "Claude AI usage limit reached. Try again later.", session_id: "q1" })' });
 assert.match(quota.text, /quota or usage limit ran out/);
 assert.match(quota.text, /Session q1 is closed/);

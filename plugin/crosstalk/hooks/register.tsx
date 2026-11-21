@@ -3,20 +3,20 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { BridgeCall, Closed, Pause, RouteRow, View } from '../types'
 
-const PANE = 'agy-bridge-map'
+const PANE = 'crosstalk'
 const TITLE = 'claude ⇄ agy'
 const TAIL = 256 * 1024 // only the newest part of the log is read
 const AGENTS = ['agy', 'claude'] as const
 // Change a tag when that value's fields change: it declines what an earlier version stored.
-const calls = atom({ plugin: 'agy-bridge-map', key: 'calls' } as const, [], { shape: 'calls-4' })
-const budget = atom({ plugin: 'agy-bridge-map', key: 'budget' } as const, 0, { shape: 'budget-1' })
-const view = atom({ plugin: 'agy-bridge-map', key: 'view' } as const, 'all', { shape: 'view-2' })
-const routes = atom({ plugin: 'agy-bridge-map', key: 'routes' } as const, [], { shape: 'routes-1' })
-const stopping = atom({ plugin: 'agy-bridge-map', key: 'stopping' } as const, [], { shape: 'stopping-1' })
-const paused = atom({ plugin: 'agy-bridge-map', key: 'paused' } as const, [], { shape: 'paused-1' })
-const closed = atom({ plugin: 'agy-bridge-map', key: 'closed' } as const, [], { shape: 'closed-1' })
+const calls = atom({ plugin: 'crosstalk', key: 'calls' } as const, [], { shape: 'calls-4' })
+const budget = atom({ plugin: 'crosstalk', key: 'budget' } as const, 0, { shape: 'budget-1' })
+const view = atom({ plugin: 'crosstalk', key: 'view' } as const, 'all', { shape: 'view-2' })
+const routes = atom({ plugin: 'crosstalk', key: 'routes' } as const, [], { shape: 'routes-1' })
+const stopping = atom({ plugin: 'crosstalk', key: 'stopping' } as const, [], { shape: 'stopping-1' })
+const paused = atom({ plugin: 'crosstalk', key: 'paused' } as const, [], { shape: 'paused-1' })
+const closed = atom({ plugin: 'crosstalk', key: 'closed' } as const, [], { shape: 'closed-1' })
 
-// Same pairing as agy-bridge/calls.mjs: start, spawned (pid), limit and end lines per call id.
+// Same pairing as crosstalk/calls.mjs: start, spawned (pid), limit and end lines per call id.
 export function pair(text: string): BridgeCall[] {
   const byId = new Map<string, BridgeCall>()
   for (const line of text.split('\n')) {
@@ -61,7 +61,7 @@ const VIEWS: { id: View; label: string }[] = [
   { id: 'sessions', label: 'Sessions' }, { id: 'routes', label: 'Routes' },
 ]
 
-let dir = '' // ~/.agy-bridge
+let dir = '' // ~/.crosstalk
 let logPath = ''
 let seen = -1
 let sessionStartedAt = 0 // calls from claude after this belong to this Claude session
@@ -86,7 +86,7 @@ async function poll($: EngineInterface) {
     // Tell the person once per quota stop, but not about old ones found when the session starts.
     for (const c of list.filter(c => c.status === 'quota' && !toasted.has(c.id))) {
       toasted.add(c.id)
-      if (!firstPoll) $.ui.toast(`${c.to} stopped: quota or usage limit ran out. Session closed; ${c.to} is paused. See /agy-map.`)
+      if (!firstPoll) $.ui.toast(`${c.to} stopped: quota or usage limit ran out. Session closed; ${c.to} is paused. See /crosstalk.`)
     }
   } else if (running) {
     await update($, calls, list => [...list]) // redraw so the elapsed time moves
@@ -132,7 +132,7 @@ export function meter(list: BridgeCall[], now: number) {
 const kTok = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n))
 const bar = (f: number, w = 16) => { const n = Math.round(Math.min(1, Math.max(0, f)) * w); return `${'█'.repeat(n)}${'░'.repeat(w - n)}` }
 
-// Ask the bridge to stop a call: it watches for ~/.agy-bridge/cancel/<id> and kills that agent's process tree.
+// Ask the bridge to stop a call: it watches for ~/.crosstalk/cancel/<id> and kills that agent's process tree.
 async function stop($: EngineInterface, id: string) {
   await $.fs.write(`${dir}/cancel/${id}`, '')
   await update($, stopping, ids => [...ids, id])
@@ -170,10 +170,10 @@ async function endSession($: EngineInterface, reason: string) {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME')) ?? ''
-    logPath = (await $.env.get('BRIDGE_LOG')) ?? `${home}/.agy-bridge/calls.jsonl`
+    logPath = (await $.env.get('CROSSTALK_LOG')) ?? `${home}/.crosstalk/calls.jsonl`
     dir = logPath.replace(/[\\/][^\\/]*$/, '')
     sessionStartedAt = await $.clock.now()
-    await $.command.register({ name: 'agy-map', description: 'Show Claude ⇄ agy agent-to-agent calls in a side pane' })
+    await $.command.register({ name: 'crosstalk', description: 'Show Claude ⇄ agy agent-to-agent calls in a side pane' })
     await poll($)
     await loadRoutes($)
     $.clock.every(1500, () => poll($))
@@ -188,7 +188,7 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'agy-map' }, async $ => {
+  on('command.run', { command: 'crosstalk' }, async $ => {
     await $.ui.open({ id: PANE, title: TITLE })
     return { text: 'agy bridge map opened.' }
   })
@@ -279,7 +279,7 @@ export const register: Register = on => {
 
         {current === 'routes' ? (
           rows.length === 0 ? (
-            <Text dimColor>No routes found. Run node sync.mjs in agy-bridge once.</Text>
+            <Text dimColor>No routes found. Run node sync.mjs in crosstalk once.</Text>
           ) : (
             <Box flexDirection="column" marginTop={1}>
               <Text dimColor>Calls pick a task; the task picks the model (* = default). Edit routes.json, then press Routes again.</Text>

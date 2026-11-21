@@ -3,8 +3,8 @@
   "owner": { "name": "vishnu-77" },
   "plugins": [
     {
-      "name": "agy-bridge-map",
-      "source": "./plugin/agy-bridge-map",
+      "name": "crosstalk",
+      "source": "./plugin/crosstalk",
       "description": "Live side pane for crosstalk: Claude Code <-> Antigravity (agy) calls, running agents with Stop, sessions, routes and a resource meter."
     }
   ]
